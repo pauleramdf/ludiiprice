@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
     torch.save(model, wdir / 'init.pt')
-
+    mlflow.pytorch.log_model(model, 'ludiiprice')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
             model.train()
 
@@ -479,7 +479,6 @@ def train(hyp, opt, device, tb_writer=None):
                         torch.save(ckpt, wdir / 'epoch_{:03d}.pt'.format(epoch))
                     if wandb_logger.wandb:
                         if ((epoch + 1) % opt.save_period == 0 and not final_epoch) and opt.save_period != -1:
-                            mlflow.pytorch.log_model(last, "model")
                             wandb_logger.log_model(
                                 last.parent, opt, epoch, fi, best_model=best_fitness == fi)
                     del ckpt
@@ -520,7 +519,8 @@ def train(hyp, opt, device, tb_writer=None):
         if opt.bucket:
             os.system(f'gsutil cp {final} gs://{opt.bucket}/weights')  # upload
 
-        mlflow.pytorch.log_model(final, 'run_' + wandb_logger.wandb_run.id + '_model')
+        active_run = mlflow.active_run()
+        mlflow.pytorch.log_model(model, 'ludiiprice')
         mlflow.end_run()
     else:
         dist.destroy_process_group()
@@ -529,8 +529,7 @@ def train(hyp, opt, device, tb_writer=None):
 
 
 if __name__ == '__main__':
-    mlflow.autolog()
-    with mlflow.start_run(log_system_metrics=True):
+    with mlflow.start_run():
         parser = argparse.ArgumentParser()
         parser.add_argument('--weights', type=str, default='yolo7.pt', help='initial weights path')
         parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
