@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None):
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
     torch.save(model, wdir / 'init.pt')
-    mlflow.pytorch.log_model(model, 'ludiiprice')
+    # mlflow.pytorch.log_model(model, 'ludiiprice')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
             model.train()
 
@@ -519,9 +519,7 @@ def train(hyp, opt, device, tb_writer=None):
         if opt.bucket:
             os.system(f'gsutil cp {final} gs://{opt.bucket}/weights')  # upload
 
-        active_run = mlflow.active_run()
         mlflow.pytorch.log_model(model, 'ludiiprice')
-        mlflow.end_run()
     else:
         dist.destroy_process_group()
     torch.cuda.empty_cache()
