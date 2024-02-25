@@ -79,6 +79,9 @@ def train(hyp, opt, device, tb_writer=None):
         if wandb_logger.wandb:
             weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp  # WandbLogger might update weights, epochs if resuming
 
+        mlflow.log_params(hyp)
+        mlflow.log_artifact(local_path=str(save_dir / 'opt.yaml'), artifact_path="opt/")
+
     nc = 1 if opt.single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if opt.single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
@@ -250,6 +253,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,
                                             image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '))
+
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, opt.data, nc - 1)
@@ -493,6 +497,18 @@ def train(hyp, opt, device, tb_writer=None):
                 files = ['results.png', 'confusion_matrix.png', *[f'{x}_curve.png' for x in ('F1', 'PR', 'P', 'R')]]
                 wandb_logger.log({"Results": [wandb_logger.wandb.Image(str(save_dir / f), caption=f) for f in files
                                               if (save_dir / f).exists()]})
+
+            if mlflow.active_run():
+                for file in save_dir.glob('train*.jpg'):
+                    if file.exists():
+                        mlflow.log_artifact(str(file), "images/train_batch/")
+
+                files = ['results.png', 'confusion_matrix.png', *[f'{x}_curve.png' for x in ('F1', 'PR', 'P', 'R')]]
+                for file in files:
+                    if file.exists():
+                        mlflow.log_artifact(str(file), "images/logs/")
+
+
         # Test best.pt
         logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
         if opt.data.endswith('coco.yaml') and nc == 80:  # if COCO
@@ -519,7 +535,8 @@ def train(hyp, opt, device, tb_writer=None):
         if opt.bucket:
             os.system(f'gsutil cp {final} gs://{opt.bucket}/weights')  # upload
 
-        mlflow.pytorch.log_model(model, 'ludiiprice')
+        mlflow.pytorch.log_model(model, 'model')
+        mlflow.log_artifact(local_path=final.absolute().as_posix(), artifact_path="weitghs/")
     else:
         dist.destroy_process_group()
     torch.cuda.empty_cache()
